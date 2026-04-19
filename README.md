@@ -29,7 +29,7 @@ Setiap folder menyimpan versi yang berbeda, dari yang paling awal hingga yang te
 
 1. Clone repositori ini:  
    ```bash
-   git clone https://github.com/nflora-ux/Operating-System-MySQL.git
+   git clone https://github.com/neveerlabs/Operating-System-MySQL.git
    ```
 2. Masuk ke dalam folder versi yang diinginkan:
    ```bash
