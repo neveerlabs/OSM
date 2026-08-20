@@ -1,8 +1,8 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/neveerlabs/OSM/main/Screenshot.png" alt="Screenshot" width="600">Operating System MySQL
+  <img src="https://raw.githubusercontent.com/neveerlabs/OSM/main/Screenshot.png" alt="Screenshot" width="600">
 </div>
 
-# MySQL Operations Tool v1
+<p align="center"><b>Operating System MySQL</b></p>
 
 Tools interaktif berbasis Node.js untuk mengelola database MySQL melalui terminal.
 
@@ -16,11 +16,11 @@ Tools interaktif berbasis Node.js untuk mengelola database MySQL melalui termina
 ## Cara Penggunaan
 1. Clone repositori:
    ```bash
-   https://github.com/nflora-ux/Operating-System-MySQL-v1.git
+   git clone https://github.com/neveerlabs/OSM.git
    ```
 2. Masuk ke direktori proyek dan instal dependensi:
    ```bash
-   cd Operating-System-MySQL/Operating-System-MySQL-v1
+   cd OSM
    ```
 3. inisialisasi Node.js `npm init -y` (opsional).
 4. Jalankan perintah `npm install` dan `npm install mysql2` untuk menginstal dependensi.
@@ -34,5 +34,5 @@ Tools interaktif berbasis Node.js untuk mengelola database MySQL melalui termina
 - Aktifkan `Apache` dan `MySQL` di XAMPP terlebih dahulu sebelum menggunakan (untuk penggunaan lokal)
 
 <div align="center">
-<b>© 2026</b> <i>MySQL Operations Tool v1</i>. All right reserved.
+<b>© 2026 <i>Operating System MySQL</i></b>. All right reserved.
 </div>
