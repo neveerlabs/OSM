@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://github.com/nflora-ux/Operating-System-MySQL/raw/ced1238a19c90e74deec97c6a35b6eba39b2f8c8/Operating-System-MySQL-v1/Screenshot.png" alt="Screenshot" width="600">
+  <img src="https://raw.githubusercontent.com/neveerlabs/OSM/main/Screenshot.png" alt="Screenshot" width="600">Operating System MySQL
 </div>
 
 # MySQL Operations Tool v1
@@ -32,9 +32,6 @@ Tools interaktif berbasis Node.js untuk mengelola database MySQL melalui termina
 
 ## Catatan penting
 - Aktifkan `Apache` dan `MySQL` di XAMPP terlebih dahulu sebelum menggunakan (untuk penggunaan lokal)
-
-## Lisensi
-MIT License
 
 <div align="center">
 <b>© 2026</b> <i>MySQL Operations Tool v1</i>. All right reserved.
