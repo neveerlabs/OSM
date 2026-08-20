@@ -1,42 +1,50 @@
 const mysql = require('mysql2/promise');
-const readline = require('readline');
-const util = require('util');
+const inquirer = require('inquirer');
 
 let pool = null;
 let currentDatabase = null;
 
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
-
-const question = util.promisify(rl.question).bind(rl);
-
-function tampilkanError(message) {
+function displayError(message) {
     console.error(`\x1b[31m⚠️ ERROR: ${message}\x1b[0m`);
 }
 
-async function connectToMySQL() {
-    try {
-        const host = await question('Host MySQL (default: localhost): ') || 'localhost';
-        const user = await question('Username MySQL (default: root): ') || 'root';
-        const password = await question('Password MySQL: ') || '';
+function displaySuccess(message) {
+    console.log(`\x1b[32m✅ ${message}\x1b[0m`);
+}
 
+function displayWarning(message) {
+    console.warn(`\x1b[33m⚠️ ${message}\x1b[0m`);
+}
+
+async function connectToMySQL() {
+    const answers = await inquirer.prompt([
+        { type: 'input', name: 'host', message: 'Host MySQL:', default: 'localhost' },
+        { type: 'input', name: 'port', message: 'Port MySQL:', default: '3306' },
+        { type: 'input', name: 'user', message: 'Username MySQL:', default: 'root' },
+        { type: 'password', name: 'password', message: 'Password MySQL:', mask: '*' },
+        { type: 'input', name: 'database', message: 'Database awal (kosongkan jika tidak ada):' }
+    ]);
+
+    try {
         pool = mysql.createPool({
-            host: host,
-            user: user,
-            password: password,
+            host: answers.host,
+            port: parseInt(answers.port),
+            user: answers.user,
+            password: answers.password,
+            database: answers.database || undefined,
             waitForConnections: true,
             connectionLimit: 10,
             queueLimit: 0
         });
 
-        const connection = await pool.getConnection();
-        connection.release();
-
+        await pool.getConnection();
+        if (answers.database) {
+            currentDatabase = answers.database;
+        }
+        displaySuccess('Terhubung ke MySQL');
         return true;
     } catch (error) {
-        tampilkanError(`Gagal terhubung ke MySQL: ${error.message}`);
+        displayError(`Gagal terhubung: ${error.message}`);
         return false;
     }
 }
@@ -46,98 +54,7 @@ async function disconnectFromMySQL() {
         await pool.end();
         pool = null;
         currentDatabase = null;
-    }
-}
-
-async function tampilkanMenuUtama() {
-    console.log('\n:::::> MYSQL SERVER <:::::');
-    console.log('1. Kelola Database');
-    console.log('2. Kelola Data (CRUD)');
-    console.log('3. Ubah Koneksi Database');
-    console.log('4. Keluar');
-    const pilihan = await question('\nMasukkan input: ');
-    return pilihan;
-}
-
-async function menuDatabase() {
-    while (true) {
-        console.log('\n:::::> MANAJEMEN DATABASE <:::::');
-        await listDatabases();
-        console.log('\n1. Buat database baru');
-        console.log('2. Hapus database');
-        console.log('3. Masuk ke dalam database');
-        console.log('4. Kembali ke menu utama');
-        const pilihan = await question('\nMasukkan input: ');
-
-        if (pilihan === '1') {
-            await createDatabase();
-        } else if (pilihan === '2') {
-            await dropDatabase();
-        } else if (pilihan === '3') {
-            await useDatabase();
-        } else if (pilihan === '4') {
-            break;
-        } else {
-            tampilkanError('Pilihan tidak valid!');
-        }
-    }
-}
-
-async function menuTabelDalamDatabase() {
-    if (!currentDatabase) {
-        tampilkanError('Belum ada database yang dipilih! Silakan pilih database terlebih dahulu.');
-        return;
-    }
-    while (true) {
-        console.log('\n:::::> MANAJEMEN TABEL <:::::');
-        await listTables();
-        console.log('\n1. Buat tabel baru');
-        console.log('2. Hapus tabel');
-        console.log('3. Lihat struktur tabel');
-        console.log('4. Kembali ke menu database');
-        const pilihan = await question('\nMasukkan input: ');
-
-        if (pilihan === '1') {
-            await createTable();
-        } else if (pilihan === '2') {
-            await dropTable();
-        } else if (pilihan === '3') {
-            await describeTable();
-        } else if (pilihan === '4') {
-            break;
-        } else {
-            tampilkanError('Pilihan tidak valid!');
-        }
-    }
-}
-
-async function menuData() {
-    if (!currentDatabase) {
-        tampilkanError('Belum ada database yang dipilih! Silakan pilih database terlebih dahulu.');
-        return;
-    }
-    while (true) {
-        console.log('\n:::::> MANAJEMEN DATA <:::::');
-        console.log('1. Tambah data (INSERT)');
-        console.log('2. Lihat data (SELECT)');
-        console.log('3. Ubah data (UPDATE)');
-        console.log('4. Hapus data (DELETE)');
-        console.log('5. Kembali ke menu utama');
-        const pilihan = await question('\nMasukkan input: ');
-
-        if (pilihan === '1') {
-            await insertRecord();
-        } else if (pilihan === '2') {
-            await selectRecords();
-        } else if (pilihan === '3') {
-            await updateRecord();
-        } else if (pilihan === '4') {
-            await deleteRecord();
-        } else if (pilihan === '5') {
-            break;
-        } else {
-            tampilkanError('Pilihan tidak valid.');
-        }
+        displaySuccess('Terputus dari MySQL');
     }
 }
 
@@ -151,66 +68,65 @@ async function listDatabases() {
             rows.forEach(row => console.log(`   📂 ${row.Database}`));
         }
     } catch (error) {
-        tampilkanError(`Gagal mengambil daftar database: ${error.message}`);
+        displayError(`Gagal mengambil daftar database: ${error.message}`);
     }
 }
 
 async function createDatabase() {
+    const { dbName } = await inquirer.prompt([
+        { type: 'input', name: 'dbName', message: 'Nama database baru:', validate: input => input ? true : 'Nama tidak boleh kosong' }
+    ]);
     try {
-        const dbName = await question('Masukkan nama database baru: ');
-        if (!dbName) {
-            tampilkanError('Nama database tidak boleh kosong!');
-            return;
-        }
         await pool.query(`CREATE DATABASE \`${dbName}\``);
-        console.log(`✅ Database '${dbName}' berhasil dibuat!`);
+        displaySuccess(`Database '${dbName}' dibuat`);
     } catch (error) {
-        tampilkanError(`Gagal membuat database: ${error.message}`);
+        displayError(`Gagal membuat database: ${error.message}`);
     }
 }
 
 async function dropDatabase() {
+    const { dbName } = await inquirer.prompt([
+        { type: 'input', name: 'dbName', message: 'Nama database yang akan dihapus:', validate: input => input ? true : 'Nama tidak boleh kosong' }
+    ]);
+    const { confirm } = await inquirer.prompt([
+        { type: 'confirm', name: 'confirm', message: `Yakin menghapus database '${dbName}'?`, default: false }
+    ]);
+    if (!confirm) {
+        displayWarning('Dibatalkan');
+        return;
+    }
     try {
-        const dbName = await question('Masukkan nama database yang akan dihapus: ');
-        if (!dbName) {
-            tampilkanError('Nama database tidak boleh kosong!');
-            return;
-        }
-        const confirm = await question(`⚠️ Yakin ingin menghapus database '${dbName}'? (y/n): `);
-        if (confirm.toLowerCase() !== 'y') {
-            console.log('Penghapusan dibatalkan.');
-            return;
-        }
         await pool.query(`DROP DATABASE \`${dbName}\``);
-        console.log(`✅ Database '${dbName}' berhasil dihapus!`);
+        displaySuccess(`Database '${dbName}' dihapus`);
         if (currentDatabase === dbName) {
             currentDatabase = null;
         }
     } catch (error) {
-        tampilkanError(`Gagal menghapus database: ${error.message}`);
+        displayError(`Gagal menghapus database: ${error.message}`);
     }
 }
 
 async function useDatabase() {
+    const { dbName } = await inquirer.prompt([
+        { type: 'input', name: 'dbName', message: 'Nama database yang akan digunakan:', validate: input => input ? true : 'Nama tidak boleh kosong' }
+    ]);
     try {
-        const dbName = await question('Masukkan nama database yang akan digunakan: ');
-        if (!dbName) {
-            tampilkanError('Nama database tidak boleh kosong!');
-            return;
-        }
         await pool.query(`USE \`${dbName}\``);
         currentDatabase = dbName;
-        console.log(`✅ Sekarang menggunakan database: ${currentDatabase}`);
-        await menuTabelDalamDatabase();
+        displaySuccess(`Sekarang menggunakan database: ${currentDatabase}`);
     } catch (error) {
-        tampilkanError(`Gagal beralih ke database: ${error.message}`);
+        displayError(`Gagal beralih ke database: ${error.message}`);
     }
 }
 
 async function listTables() {
+    if (!currentDatabase) {
+        displayError('Belum pilih database');
+        return;
+    }
     try {
         const [rows] = await pool.query('SHOW TABLES');
-        console.log(`\n📂 DAFTAR TABEL (database: ${currentDatabase}):`);
+        console.log(`\n📂 DAFTAR TABEL (${currentDatabase}):`);
         if (rows.length === 0) {
             console.log('   (kosong)');
         } else {
@@ -220,227 +136,524 @@ async function listTables() {
             });
         }
     } catch (error) {
-        tampilkanError(`Gagal mengambil daftar tabel: ${error.message}`);
+        displayError(`Gagal mengambil daftar tabel: ${error.message}`);
     }
 }
 
 async function createTable() {
-    try {
-        const tableName = await question('Masukkan nama tabel baru: ');
-        if (!tableName) {
-            tampilkanError('Nama tabel tidak boleh kosong!');
-            return;
-        }
-
-        console.log('🔧 Masukkan definisi kolom (contoh: id INT AUTO_INCREMENT PRIMARY KEY).');
-        console.log('Ketik "selesai" pada baris kosong untuk mengakhiri.');
-        const columns = [];
-        while (true) {
-            const colDef = await question('   Kolom: ');
-            if (colDef.toLowerCase() === 'selesai') break;
-            if (colDef.trim() === '') continue;
+    if (!currentDatabase) {
+        displayError('Belum pilih database');
+        return;
+    }
+    const { tableName } = await inquirer.prompt([
+        { type: 'input', name: 'tableName', message: 'Nama tabel baru:', validate: input => input ? true : 'Nama tidak boleh kosong' }
+    ]);
+    console.log('Masukkan definisi kolom (contoh: id INT AUTO_INCREMENT PRIMARY KEY).');
+    console.log('Ketik "selesai" jika sudah.');
+    const columns = [];
+    let addMore = true;
+    while (addMore) {
+        const { colDef } = await inquirer.prompt([
+            { type: 'input', name: 'colDef', message: 'Kolom:' }
+        ]);
+        if (colDef.toLowerCase() === 'selesai') {
+            addMore = false;
+        } else if (colDef.trim() !== '') {
             columns.push(colDef);
         }
-        if (columns.length === 0) {
-            tampilkanError('Tidak ada definisi kolom, pembatalan.');
-            return;
-        }
-
-        const query = `CREATE TABLE \`${tableName}\` (${columns.join(', ')})`;
+    }
+    if (columns.length === 0) {
+        displayWarning('Tidak ada kolom, pembatalan');
+        return;
+    }
+    const query = `CREATE TABLE \`${tableName}\` (${columns.join(', ')})`;
+    try {
         await pool.query(query);
-        console.log(`✅ Tabel '${tableName}' berhasil dibuat!`);
+        displaySuccess(`Tabel '${tableName}' dibuat`);
     } catch (error) {
-        tampilkanError(`Gagal membuat tabel: ${error.message}`);
+        displayError(`Gagal membuat tabel: ${error.message}`);
     }
 }
 
 async function dropTable() {
+    if (!currentDatabase) {
+        displayError('Belum pilih database');
+        return;
+    }
+    const { tableName } = await inquirer.prompt([
+        { type: 'input', name: 'tableName', message: 'Nama tabel yang akan dihapus:', validate: input => input ? true : 'Nama tidak boleh kosong' }
+    ]);
+    const { confirm } = await inquirer.prompt([
+        { type: 'confirm', name: 'confirm', message: `Yakin menghapus tabel '${tableName}'?`, default: false }
+    ]);
+    if (!confirm) {
+        displayWarning('Dibatalkan');
+        return;
+    }
     try {
-        const tableName = await question('Masukkan nama tabel yang akan dihapus: ');
-        if (!tableName) {
-            tampilkanError('Nama tabel tidak boleh kosong.');
-            return;
-        }
-        const confirm = await question(`⚠️ Yakin ingin menghapus tabel '${tableName}'? (y/n): `);
-        if (confirm.toLowerCase() !== 'y') {
-            console.log('Penghapusan dibatalkan.');
-            return;
-        }
         await pool.query(`DROP TABLE \`${tableName}\``);
-        console.log(`✅ Tabel '${tableName}' berhasil dihapus!`);
+        displaySuccess(`Tabel '${tableName}' dihapus`);
     } catch (error) {
-        tampilkanError(`Gagal menghapus tabel: ${error.message}`);
+        displayError(`Gagal menghapus tabel: ${error.message}`);
     }
 }
 
 async function describeTable() {
+    if (!currentDatabase) {
+        displayError('Belum pilih database');
+        return;
+    }
+    const { tableName } = await inquirer.prompt([
+        { type: 'input', name: 'tableName', message: 'Nama tabel:', validate: input => input ? true : 'Nama tidak boleh kosong' }
+    ]);
     try {
-        const tableName = await question('Masukkan nama tabel: ');
-        if (!tableName) {
-            tampilkanError('Nama tabel tidak boleh kosong!');
-            return;
-        }
         const [rows] = await pool.query(`DESCRIBE \`${tableName}\``);
         if (rows.length === 0) {
-            console.log('Tabel tidak ditemukan atau tidak memiliki struktur.');
+            console.log('Tabel tidak ditemukan');
         } else {
             console.table(rows);
         }
     } catch (error) {
-        tampilkanError(`Gagal mengambil struktur tabel: ${error.message}`);
+        displayError(`Gagal mengambil struktur: ${error.message}`);
+    }
+}
+
+async function viewTableData() {
+    if (!currentDatabase) {
+        displayError('Belum pilih database');
+        return;
+    }
+    const { tableName } = await inquirer.prompt([
+        { type: 'input', name: 'tableName', message: 'Nama tabel:', validate: input => input ? true : 'Nama tidak boleh kosong' }
+    ]);
+    try {
+        const [rows] = await pool.query(`SELECT * FROM \`${tableName}\` LIMIT 100`);
+        if (rows.length === 0) {
+            console.log('Tabel kosong');
+        } else {
+            console.table(rows);
+        }
+    } catch (error) {
+        displayError(`Gagal mengambil data: ${error.message}`);
     }
 }
 
 async function insertRecord() {
+    if (!currentDatabase) {
+        displayError('Belum pilih database');
+        return;
+    }
+    const { tableName } = await inquirer.prompt([
+        { type: 'input', name: 'tableName', message: 'Nama tabel:', validate: input => input ? true : 'Nama tidak boleh kosong' }
+    ]);
     try {
-        const tableName = await question('Masukkan nama tabel: ');
-        if (!tableName) {
-            tampilkanError('Nama tabel tidak boleh kosong.');
-            return;
-        }
         const [columns] = await pool.query(`DESCRIBE \`${tableName}\``);
         if (columns.length === 0) {
-            tampilkanError(`Tabel '${tableName}' tidak ditemukan.`);
+            displayError(`Tabel '${tableName}' tidak ditemukan`);
             return;
         }
-        const columnNames = columns.map(col => col.Field);
         const values = [];
-        for (const col of columnNames) {
-            const value = await question(`   Nilai untuk kolom '${col}' (kosongkan jika NULL): `);
-            values.push(value || null);
+        for (const col of columns) {
+            if (col.Field === 'id' && col.Extra && col.Extra.includes('auto_increment')) {
+                continue;
+            }
+            const { value } = await inquirer.prompt([
+                { type: 'input', name: 'value', message: `Nilai untuk '${col.Field}' (kosongkan untuk NULL):` }
+            ]);
+            values.push(value === '' ? null : value);
         }
         const placeholders = values.map(() => '?').join(', ');
-        const query = `INSERT INTO \`${tableName}\` (${columnNames.map(c => `\`${c}\``).join(', ')}) VALUES (${placeholders})`;
+        const query = `INSERT INTO \`${tableName}\` VALUES (${placeholders})`;
         const [result] = await pool.query(query, values);
-        console.log(`✅ Data berhasil ditambahkan. ID baris baru: ${result.insertId}`);
+        displaySuccess(`Data ditambahkan, ID: ${result.insertId}`);
     } catch (error) {
-        tampilkanError(`Gagal menambah data: ${error.message}`);
+        displayError(`Gagal insert: ${error.message}`);
     }
 }
 
 async function selectRecords() {
+    if (!currentDatabase) {
+        displayError('Belum pilih database');
+        return;
+    }
+    const { tableName } = await inquirer.prompt([
+        { type: 'input', name: 'tableName', message: 'Nama tabel:', validate: input => input ? true : 'Nama tidak boleh kosong' }
+    ]);
     try {
-        const tableName = await question('Masukkan nama tabel: ');
-        if (!tableName) {
-            tampilkanError('Nama tabel tidak boleh kosong!');
+        const [columns] = await pool.query(`DESCRIBE \`${tableName}\``);
+        if (columns.length === 0) {
+            displayError(`Tabel '${tableName}' tidak ditemukan`);
             return;
         }
-        const [tables] = await pool.query('SHOW TABLES LIKE ?', [tableName]);
-        if (tables.length === 0) {
-            tampilkanError(`Tabel '${tableName}' tidak ditemukan.`);
-            return;
+        const { useFilter } = await inquirer.prompt([
+            { type: 'confirm', name: 'useFilter', message: 'Ingin filter data?', default: false }
+        ]);
+        let whereClause = '';
+        let values = [];
+        if (useFilter) {
+            console.log('Bangun kondisi WHERE (semua kondisi akan digabung dengan AND)');
+            let addCondition = true;
+            const conditions = [];
+            while (addCondition) {
+                const columnChoices = columns.map(c => ({ name: c.Field, value: c.Field }));
+                const { column } = await inquirer.prompt([
+                    { type: 'list', name: 'column', message: 'Pilih kolom:', choices: columnChoices }
+                ]);
+                const { operator } = await inquirer.prompt([
+                    { type: 'list', name: 'operator', message: 'Operator:', choices: ['=', '!=', '>', '<', '>=', '<=', 'LIKE'] }
+                ]);
+                const { value } = await inquirer.prompt([
+                    { type: 'input', name: 'value', message: 'Nilai:' }
+                ]);
+                conditions.push(`\`${column}\` ${operator} ?`);
+                values.push(value);
+                const { again } = await inquirer.prompt([
+                    { type: 'confirm', name: 'again', message: 'Tambah kondisi lagi?', default: false }
+                ]);
+                addCondition = again;
+            }
+            if (conditions.length > 0) {
+                whereClause = 'WHERE ' + conditions.join(' AND ');
+            }
         }
-        const kondisi = await question('   Kondisi WHERE (contoh: id=1), kosongkan jika semua: ');
-        const query = kondisi ? `SELECT * FROM \`${tableName}\` WHERE ${kondisi} LIMIT 100` : `SELECT * FROM \`${tableName}\` LIMIT 100`;
-        const [rows] = await pool.query(query);
+        const query = `SELECT * FROM \`${tableName}\` ${whereClause} LIMIT 100`;
+        const [rows] = await pool.query(query, values);
         if (rows.length === 0) {
-            console.log('   Tidak ada data ditemukan!');
+            console.log('Tidak ada data');
         } else {
             console.table(rows);
         }
     } catch (error) {
-        tampilkanError(`Gagal mengambil data: ${error.message}`);
+        displayError(`Gagal mengambil data: ${error.message}`);
     }
 }
 
 async function updateRecord() {
+    if (!currentDatabase) {
+        displayError('Belum pilih database');
+        return;
+    }
+    const { tableName } = await inquirer.prompt([
+        { type: 'input', name: 'tableName', message: 'Nama tabel:', validate: input => input ? true : 'Nama tidak boleh kosong' }
+    ]);
     try {
-        const tableName = await question('Masukkan nama tabel: ');
-        if (!tableName) {
-            tampilkanError('Nama tabel tidak boleh kosong!');
+        const [columns] = await pool.query(`DESCRIBE \`${tableName}\``);
+        if (columns.length === 0) {
+            displayError(`Tabel '${tableName}' tidak ditemukan`);
             return;
         }
-        const [tables] = await pool.query('SHOW TABLES LIKE ?', [tableName]);
-        if (tables.length === 0) {
-            tampilkanError(`Tabel '${tableName}' tidak ditemukan.`);
+        const setPairs = [];
+        const setValues = [];
+        console.log('Tentukan nilai yang akan diubah (SET)');
+        let addSet = true;
+        while (addSet) {
+            const columnChoices = columns.map(c => ({ name: c.Field, value: c.Field }));
+            const { column } = await inquirer.prompt([
+                { type: 'list', name: 'column', message: 'Pilih kolom:', choices: columnChoices }
+            ]);
+            const { value } = await inquirer.prompt([
+                { type: 'input', name: 'value', message: `Nilai baru untuk '${column}':` }
+            ]);
+            setPairs.push(`\`${column}\` = ?`);
+            setValues.push(value);
+            const { again } = await inquirer.prompt([
+                { type: 'confirm', name: 'again', message: 'Ubah kolom lain?', default: false }
+            ]);
+            addSet = again;
+        }
+        if (setPairs.length === 0) {
+            displayWarning('Tidak ada perubahan, dibatalkan');
             return;
         }
-        const setClause = await question('   Bagian SET (contoh: nama="baru", umur=30): ');
-        if (!setClause) {
-            tampilkanError('SET tidak boleh kosong.');
-            return;
+        const { useFilter } = await inquirer.prompt([
+            { type: 'confirm', name: 'useFilter', message: 'Tentukan kondisi WHERE? (jika tidak, semua data akan diupdate)', default: true }
+        ]);
+        let whereClause = '';
+        const whereValues = [];
+        if (useFilter) {
+            console.log('Bangun kondisi WHERE');
+            let addCondition = true;
+            const conditions = [];
+            while (addCondition) {
+                const columnChoices = columns.map(c => ({ name: c.Field, value: c.Field }));
+                const { column } = await inquirer.prompt([
+                    { type: 'list', name: 'column', message: 'Pilih kolom:', choices: columnChoices }
+                ]);
+                const { operator } = await inquirer.prompt([
+                    { type: 'list', name: 'operator', message: 'Operator:', choices: ['=', '!=', '>', '<', '>=', '<=', 'LIKE'] }
+                ]);
+                const { value } = await inquirer.prompt([
+                    { type: 'input', name: 'value', message: 'Nilai:' }
+                ]);
+                conditions.push(`\`${column}\` ${operator} ?`);
+                whereValues.push(value);
+                const { again } = await inquirer.prompt([
+                    { type: 'confirm', name: 'again', message: 'Tambah kondisi lagi?', default: false }
+                ]);
+                addCondition = again;
+            }
+            if (conditions.length > 0) {
+                whereClause = 'WHERE ' + conditions.join(' AND ');
+            }
+        } else {
+            const { confirm } = await inquirer.prompt([
+                { type: 'confirm', name: 'confirm', message: 'TANPA WHERE! Semua data akan diupdate. Lanjut?', default: false }
+            ]);
+            if (!confirm) {
+                displayWarning('Dibatalkan');
+                return;
+            }
         }
-        const kondisi = await question('   Kondisi WHERE (contoh: id=1), kosongkan jika semua: ');
-        const query = kondisi ? `UPDATE \`${tableName}\` SET ${setClause} WHERE ${kondisi}` : `UPDATE \`${tableName}\` SET ${setClause}`;
-        const [result] = await pool.query(query);
-        console.log(`✅ Data berhasil diupdate. Baris terpengaruh: ${result.affectedRows}`);
+        const query = `UPDATE \`${tableName}\` SET ${setPairs.join(', ')} ${whereClause}`;
+        const allValues = [...setValues, ...whereValues];
+        const [result] = await pool.query(query, allValues);
+        displaySuccess(`Data diupdate, baris terpengaruh: ${result.affectedRows}`);
     } catch (error) {
-        tampilkanError(`Gagal mengupdate data: ${error.message}`);
+        displayError(`Gagal update: ${error.message}`);
     }
 }
 
 async function deleteRecord() {
+    if (!currentDatabase) {
+        displayError('Belum pilih database');
+        return;
+    }
+    const { tableName } = await inquirer.prompt([
+        { type: 'input', name: 'tableName', message: 'Nama tabel:', validate: input => input ? true : 'Nama tidak boleh kosong' }
+    ]);
     try {
-        const tableName = await question('Masukkan nama tabel: ');
-        if (!tableName) {
-            tampilkanError('Nama tabel tidak boleh kosong!');
+        const [columns] = await pool.query(`DESCRIBE \`${tableName}\``);
+        if (columns.length === 0) {
+            displayError(`Tabel '${tableName}' tidak ditemukan`);
             return;
         }
-        const [tables] = await pool.query('SHOW TABLES LIKE ?', [tableName]);
-        if (tables.length === 0) {
-            tampilkanError(`Tabel '${tableName}' tidak ditemukan.`);
-            return;
-        }
-        const kondisi = await question('   Kondisi WHERE (contoh: id=1), kosongkan jika semua: ');
-        if (!kondisi) {
-            const confirm = await question('⚠️ TANPA KONDISI WHERE! Semua data akan dihapus. Lanjut? (y/n): ');
-            if (confirm.toLowerCase() !== 'y') {
-                console.log('Penghapusan dibatalkan.');
+        const { useFilter } = await inquirer.prompt([
+            { type: 'confirm', name: 'useFilter', message: 'Tentukan kondisi WHERE? (jika tidak, semua data akan dihapus)', default: true }
+        ]);
+        let whereClause = '';
+        const values = [];
+        if (useFilter) {
+            console.log('Bangun kondisi WHERE');
+            let addCondition = true;
+            const conditions = [];
+            while (addCondition) {
+                const columnChoices = columns.map(c => ({ name: c.Field, value: c.Field }));
+                const { column } = await inquirer.prompt([
+                    { type: 'list', name: 'column', message: 'Pilih kolom:', choices: columnChoices }
+                ]);
+                const { operator } = await inquirer.prompt([
+                    { type: 'list', name: 'operator', message: 'Operator:', choices: ['=', '!=', '>', '<', '>=', '<=', 'LIKE'] }
+                ]);
+                const { value } = await inquirer.prompt([
+                    { type: 'input', name: 'value', message: 'Nilai:' }
+                ]);
+                conditions.push(`\`${column}\` ${operator} ?`);
+                values.push(value);
+                const { again } = await inquirer.prompt([
+                    { type: 'confirm', name: 'again', message: 'Tambah kondisi lagi?', default: false }
+                ]);
+                addCondition = again;
+            }
+            if (conditions.length > 0) {
+                whereClause = 'WHERE ' + conditions.join(' AND ');
+            }
+        } else {
+            const { confirm } = await inquirer.prompt([
+                { type: 'confirm', name: 'confirm', message: 'TANPA WHERE! Semua data akan dihapus. Lanjut?', default: false }
+            ]);
+            if (!confirm) {
+                displayWarning('Dibatalkan');
                 return;
             }
         }
-        const query = kondisi ? `DELETE FROM \`${tableName}\` WHERE ${kondisi}` : `DELETE FROM \`${tableName}\``;
-        const [result] = await pool.query(query);
-        console.log(`✅ Data berhasil dihapus. Baris terpengaruh: ${result.affectedRows}`);
+        const query = `DELETE FROM \`${tableName}\` ${whereClause}`;
+        const [result] = await pool.query(query, values);
+        displaySuccess(`Data dihapus, baris terpengaruh: ${result.affectedRows}`);
     } catch (error) {
-        tampilkanError(`Gagal menghapus data: ${error.message}`);
+        displayError(`Gagal delete: ${error.message}`);
     }
 }
 
+async function runCustomQuery() {
+    if (!pool) {
+        displayError('Tidak terhubung ke MySQL');
+        return;
+    }
+    const { query } = await inquirer.prompt([
+        { type: 'editor', name: 'query', message: 'Tulis query SQL (akan dieksekusi):' }
+    ]);
+    if (!query.trim()) {
+        displayWarning('Query kosong');
+        return;
+    }
+    try {
+        const [rows] = await pool.query(query);
+        console.log('Hasil:');
+        console.table(rows);
+    } catch (error) {
+        displayError(`Query gagal: ${error.message}`);
+    }
+}
+
+async function menuDatabase() {
+    while (true) {
+        console.log('\n:::::> MANAJEMEN DATABASE <:::::');
+        await listDatabases();
+        const { action } = await inquirer.prompt([
+            {
+                type: 'list',
+                name: 'action',
+                message: 'Pilih aksi:',
+                choices: [
+                    'Buat database baru',
+                    'Hapus database',
+                    'Masuk ke database',
+                    'Kembali'
+                ]
+            }
+        ]);
+        if (action === 'Buat database baru') {
+            await createDatabase();
+        } else if (action === 'Hapus database') {
+            await dropDatabase();
+        } else if (action === 'Masuk ke database') {
+            await useDatabase();
+            if (currentDatabase) {
+                await menuTabel();
+            }
+        } else {
+            break;
+        }
+    }
+}
+
+async function menuTabel() {
+    while (true) {
+        console.log(`\n:::::> MANAJEMEN TABEL (${currentDatabase}) <:::::`);
+        await listTables();
+        const { action } = await inquirer.prompt([
+            {
+                type: 'list',
+                name: 'action',
+                message: 'Pilih aksi:',
+                choices: [
+                    'Buat tabel baru',
+                    'Hapus tabel',
+                    'Lihat struktur tabel',
+                    'Lihat isi tabel',
+                    'Kelola data (CRUD)',
+                    'Kembali ke menu database'
+                ]
+            }
+        ]);
+        if (action === 'Buat tabel baru') {
+            await createTable();
+        } else if (action === 'Hapus tabel') {
+            await dropTable();
+        } else if (action === 'Lihat struktur tabel') {
+            await describeTable();
+        } else if (action === 'Lihat isi tabel') {
+            await viewTableData();
+        } else if (action === 'Kelola data (CRUD)') {
+            await menuData();
+        } else {
+            break;
+        }
+    }
+}
+
+async function menuData() {
+    while (true) {
+        console.log(`\n:::::> MANAJEMEN DATA (${currentDatabase}) <:::::`);
+        const { action } = await inquirer.prompt([
+            {
+                type: 'list',
+                name: 'action',
+                message: 'Pilih operasi:',
+                choices: [
+                    'Tambah data (INSERT)',
+                    'Cari data (SELECT dengan filter)',
+                    'Ubah data (UPDATE)',
+                    'Hapus data (DELETE)',
+                    'Kembali'
+                ]
+            }
+        ]);
+        if (action === 'Tambah data (INSERT)') {
+            await insertRecord();
+        } else if (action === 'Cari data (SELECT dengan filter)') {
+            await selectRecords();
+        } else if (action === 'Ubah data (UPDATE)') {
+            await updateRecord();
+        } else if (action === 'Hapus data (DELETE)') {
+            await deleteRecord();
+        } else {
+            break;
+        }
+    }
+}
+
+async function mainMenu() {
+    const dbIndicator = currentDatabase ? `[${currentDatabase}]` : '[tidak ada database]';
+    console.log(`\n:::::> MYSQL SERVER ${dbIndicator} <:::::`);
+    const { choice } = await inquirer.prompt([
+        {
+            type: 'list',
+            name: 'choice',
+            message: 'Menu utama:',
+            choices: [
+                'Kelola Database',
+                'Kelola Data (CRUD)',
+                'Jalankan Query SQL',
+                'Ubah Koneksi',
+                'Keluar'
+            ]
+        }
+    ]);
+    return choice;
+}
+
 async function main() {
-    console.log('SISTEM OPERASI MYSQL\n');
+    console.log('SISTEM OPERASI MYSQL (OSM)\n');
     const connected = await connectToMySQL();
     if (!connected) {
-        rl.close();
-        return;
+        process.exit(1);
     }
 
     await listDatabases();
 
     let running = true;
     while (running) {
-        const pilihan = await tampilkanMenuUtama();
-        switch (pilihan) {
-            case '1':
-                await menuDatabase();
-                break;
-            case '2':
+        const pilihan = await mainMenu();
+        if (pilihan === 'Kelola Database') {
+            await menuDatabase();
+        } else if (pilihan === 'Kelola Data (CRUD)') {
+            if (!currentDatabase) {
+                displayError('Pilih database dulu');
+            } else {
                 await menuData();
-                break;
-            case '3':
-                await disconnectFromMySQL();
-                console.log('\n⚠️ Silahkan connect ulang!');
-                const ulang = await connectToMySQL();
-                if (!ulang) {
-                    running = false;
-                } else {
-                    await listDatabases();
-                }
-                break;
-            case '4':
+            }
+        } else if (pilihan === 'Jalankan Query SQL') {
+            await runCustomQuery();
+        } else if (pilihan === 'Ubah Koneksi') {
+            await disconnectFromMySQL();
+            displayWarning('Silakan connect ulang');
+            const ok = await connectToMySQL();
+            if (ok) {
+                await listDatabases();
+            } else {
                 running = false;
-                break;
-            default:
-                tampilkanError('Pilihan tidak valid!');
+            }
+        } else {
+            running = false;
         }
     }
 
     await disconnectFromMySQL();
-    rl.close();
-    console.log('Terima kasih telah menggunakan sistem operasi MySQL...');
+    console.log('👋 Selesai');
 }
 
 main().catch(error => {
-    tampilkanError(`Kesalahan tak terduga: ${error.message}`);
+    displayError(`Kesalahan fatal: ${error.message}`);
     process.exit(1);
 });
