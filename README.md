@@ -32,6 +32,7 @@
 
 ## Catatan penting
 - Aktifkan `Apache` dan `MySQL` di XAMPP terlebih dahulu sebelum menggunakan (untuk penggunaan lokal)
+- <i>Tidak ada data yang disimpan atau dikirim pada server manapun.</i>
 
 <div align="center">
 <b>© 2026 <i>Operating System MySQL</i></b>. All right reserved.
