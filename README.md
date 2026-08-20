@@ -4,7 +4,7 @@
 
 <p align="center"><b>Operating System MySQL</b></p>
 
-Tools interaktif berbasis Node.js untuk mengelola database MySQL melalui terminal.
+<p align="center">Tools interaktif berbasis Node.js untuk mengelola database MySQL melalui terminal.</p>
 
 ## Fitur
 - Manajemen database (lihat, buat, hapus, pilih database)
